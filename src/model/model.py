@@ -26,6 +26,9 @@ class Model(ABC):
     def plot(self, history):
         pass
 
+    @abstractmethod
+    def save_model(self, filepath):
+        pass
 class LSTMModel:
     def __init__(self, input_shape, units, dropout_rate, num_classes):
         """
@@ -72,6 +75,10 @@ class LSTMModel:
         plt.xlabel('Epoch')
         plt.legend(['Train', 'Test'], loc='upper left')
         plt.show()
+
+    def save_model(self, filepath):
+        self.model.save(filepath)
+        print(f'Model saved to {filepath}')
 
 class HyperparameterTuner:
     """
