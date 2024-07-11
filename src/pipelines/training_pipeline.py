@@ -16,7 +16,8 @@ def training_pipeline(file_name: str, time_steps: int, units, dropout_rate, epoc
         history = model.train(X_train=X_train, y_train=Y_train, X_test=X_test, y_test=Y_test, epochs=epochs, batch_size=batch_size)
 
         # Lưu mô hình
-        model.save_model('path_to_save_model.h5')
+        model.save_model(r'save_model/LSTM_model.h5')
+        model.save_history(history, r'save_history/LSTM_history.csv')
 
         # Vẽ biểu đồ kết quả của quá trình huấn luyện
         model.plot(history)

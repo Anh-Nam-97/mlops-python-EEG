@@ -3,6 +3,7 @@ from keras.layers import Dense, LSTM, Bidirectional, Dropout, TimeDistributed
 from keras.callbacks import EarlyStopping
 import matplotlib.pyplot as plt
 import optuna
+import os
 
 from abc import ABC, abstractmethod
 
@@ -29,6 +30,11 @@ class Model(ABC):
     @abstractmethod
     def save_model(self, filepath):
         pass
+
+    @abstractmethod
+    def save_history(self, history, filepath):
+        pass
+
 class LSTMModel:
     def __init__(self, input_shape, units, dropout_rate, num_classes):
         """
@@ -77,8 +83,29 @@ class LSTMModel:
         plt.show()
 
     def save_model(self, filepath):
+        # Tạo thư mục nếu chưa tồn tại
+        dir_name = os.path.dirname(filepath)
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+
         self.model.save(filepath)
         print(f'Model saved to {filepath}')
+
+    def save_history(self, history, filepath):
+        # Tạo thư mục nếu chưa tồn tại
+        dir_name = os.path.dirname(filepath)
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+
+        # Tạo một DataFrame từ lịch sử huấn luyện
+        history_df = pd.DataFrame({
+            'epoch': range(1, len(history.history['accuracy']) + 1),
+            'accuracy_train': history.history['accuracy'],
+            'accuracy_test': history.history['val_accuracy'],
+        })
+        # Lưu DataFrame vào tệp CSV
+        history_df.to_csv(filepath, index=False)
+        print(f'History saved to {filepath}')
 
 class HyperparameterTuner:
     """
