@@ -4,6 +4,11 @@ from sklearn.model_selection import train_test_split
 from typing import Union, Tuple
 import logging
 from abc import ABC, abstractmethod
+from sklearn.preprocessing import OneHotEncoder
+from keras.optimizers import Adam
+import scipy as sp
+from scipy.interpolate import interp1d
+from tqdm import tqdm
 
 class DataStrategy(ABC):
     @abstractmethod
@@ -45,8 +50,13 @@ class DataStrategy(ABC):
 
 def create_sequences(data, time_steps):
     X = []
-    for i in range(data.shape[1] - time_steps + 1):
-        X.append(data[:, i:i + time_steps])
+    for k in tqdm(range(len(data))):
+        S_W = []
+        for i in range(0,data.shape[1] - time_steps + 1, time_steps//5):
+            S_W.append(FeatureExtract.FFT(Preprocessing.filter_data(data[k, i:i + time_steps])))
+        X.append(S_W)
+    X = np.array(X)
+    print(X.shape)
     return np.array(X)
 
 class TimeSeriesDataPreparer:
@@ -60,11 +70,10 @@ class TimeSeriesDataPreparer:
             data = df.values
 
             X = create_sequences(data[:, :-1], self.time_steps)
+            y = data[:, -1]
 
-            y = []
-            y_seg = data[:, -1]
-            for i in range(X.shape[0]):
-                y.append(y_seg)
+            encoder = OneHotEncoder(sparse_output=False)
+            y = encoder.fit_transform(y.reshape(-1, 1))
             y = np.array(y)
             return X, y
         except Exception as e:
@@ -110,3 +119,73 @@ class DataCleaning:
             return self.strategy.handle_data(data)
         else:
             return self.strategy.handle_data(X, y)
+
+class Preprocessing:
+    """
+    Preprocessing class which preprocesses the data.
+    """
+    def __init__(self, strategy: DataSplitStrategy):
+        self.strategy = strategy
+
+    def filter_data(data):
+        # Bandpass filter
+        band = [0.5 / (0.5 * 160), 40 / (0.5 * 160)]
+        b, a = sp.signal.butter(0, band, btype='band', analog=False, output='ba')
+        data = sp.signal.lfilter(b, a, data)
+
+        # plt.hist(data, bins=10, edgecolor='black')
+        # filter for EMG by interpolated
+        return data
+class FeatureExtract:
+    """
+    FeatureExtract class which extracts features from the data.
+    """
+    def __init__(self):
+        pass
+
+    def FFT(y: np.ndarray) -> np.ndarray:
+        # y trong truong hop nay co do dai timestep
+        # Output: FFT(y)
+        flm = 160
+        L = len(y)
+        Y = np.fft.fft(y)
+        Y[0] = 0
+        P2 = np.abs(Y / L)
+        P1 = P2[:L // 2 + 1]
+        P1[1:-1] = 2 * P1[1:-1]
+        # # Find the indices of the frequency values between 0.5 Hz and 4 Hz
+        # f1 = np.arange(len(P1)) * flm / len(P1)
+        # indices1 = np.where((f1 >= 0.5) & (f1 <= 4))[0]
+        # delta = np.sum(P1[indices1])
+        #
+        # f1 = np.arange(len(P1)) * flm / len(P1)
+        # indices1 = np.where((f1 >= 4) & (f1 <= 8))[0]
+        # theta = np.sum(P1[indices1])
+        #
+        # f1 = np.arange(len(P1)) * flm / len(P1)
+        # indices1 = np.where((f1 >= 8) & (f1 <= 13))[0]
+        # alpha = np.sum(P1[indices1])
+        #
+        # f1 = np.arange(len(P1)) * flm / len(P1)
+        # indices1 = np.where((f1 >= 13) & (f1 <= 30))[0]
+        # beta = np.sum(P1[indices1])
+        #
+        # abr = alpha / beta
+        # tbr = theta / beta
+        # dbr = delta / beta
+        # tar = theta / alpha
+        # dar = delta / alpha
+        # dtabr = (alpha + beta) / (delta + theta)
+        # dict = {"delta": delta,
+        #         "theta": theta,
+        #         "alpha": alpha,
+        #         "beta": beta,
+        #         "abr": abr,
+        #         "tbr": tbr,
+        #         "dbr": dbr,
+        #         "tar": tar,
+        #         "dar": dar,
+        #         "dtabr": dtabr
+        #         }
+        # # print(dict)
+        return P1
