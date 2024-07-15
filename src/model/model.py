@@ -212,12 +212,11 @@ class LSTMModel:
                                  validation_data=(X_test, y_test), callbacks=[early_stopping])
         return history
 
-    def optimize(self, num_classes, X_train, y_train, X_test, y_test):
+    def optimize(self, X_train, y_train, X_test, y_test):
         """
         Optimizes hyperparameters of the LSTM model using Optuna.
 
         Args:
-            num_classes (int): Number of classes for classification.
             X_train (numpy.ndarray): Training data input.
             y_train (numpy.ndarray): Training data labels.
             X_test (numpy.ndarray): Validation data input.
@@ -233,14 +232,13 @@ class LSTMModel:
             learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e-2)
 
             model = Sequential()
-            model.add(Bidirectional(LSTM(units=units, activation='tanh', return_sequences=True),
-                                    input_shape=X_train.shape[1:]))
-            model.add(TimeDistributed(Dense(units=32, activation='tanh')))
+            model.add(Bidirectional(LSTM(units=units, activation='tanh', return_sequences=False), input_shape=self.input_shape))
+            model.add(Dense(units=32, activation='tanh'))
             model.add(Dropout(dropout_rate))
-            model.add(TimeDistributed(Dense(units=num_classes, activation='softmax')))
+            model.add(Dense(units=self.num_classes, activation='softmax'))
 
-            opt = Adam(lr=learning_rate)
-            model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+            opt = Adam(learning_rate=learning_rate)  # Sử dụng tham số learning_rate thay vì lr
+            model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
 
             early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
             model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test),
