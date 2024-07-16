@@ -106,7 +106,7 @@ class TransformerModel(Model):
 
         self.model = tf.keras.models.Model(inputs=input_seq, outputs=out)
 
-    def train(self, X_train, y_train, X_val, y_val, epochs, batch_size, trial=None):
+    def train(self, X_train, y_train, X_test, y_test, epochs, batch_size, trial=None):
         opt = Adam(lr=1e-3)
         self.model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
 
@@ -117,29 +117,47 @@ class TransformerModel(Model):
             callbacks.append(TFKerasPruningCallback(trial, monitor='val_loss'))
 
         history = self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size,
-                                 validation_data=(X_val, y_val), callbacks=callbacks)
+                                 validation_data=(X_test, y_test), callbacks=callbacks)
         return history
 
-    def optimize(self, trial, X_train, y_train, X_val, y_val):
-        self.d_k = trial.suggest_int('d_k', 32, 128)
-        self.d_v = trial.suggest_int('d_v', 32, 128)
-        self.n_heads = trial.suggest_int('n_heads', 1, 8)
-        self.ff_dim = trial.suggest_int('ff_dim', 128, 512)
-        dropout_rate = trial.suggest_float('dropout_rate', 0.1, 0.5)
-        learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
+    def optimize(self, X_train, y_train, X_test, y_test):
+        """
+        Optimizes hyperparameters of the Transformer model using Optuna.
 
-        self.build_model()  # Rebuild model with new hyperparameters
+        Args:
+            X_train (numpy.ndarray): Training data input.
+            y_train (numpy.ndarray): Training data labels.
+            X_test (numpy.ndarray): Validation data input.
+            y_test (numpy.ndarray): Validation data labels.
 
-        opt = Adam(lr=learning_rate)
-        self.model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+        Returns:
+            Study object containing the results of hyperparameter optimization.
+        """
 
-        early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-        self.model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_val, y_val),
-                       callbacks=[early_stopping, TFKerasPruningCallback(trial, monitor='val_loss')], verbose=0)
+        def objective(trial):
+            self.d_k = trial.suggest_int('d_k', 32, 128)
+            self.d_v = trial.suggest_int('d_v', 32, 128)
+            self.n_heads = trial.suggest_int('n_heads', 1, 8)
+            self.ff_dim = trial.suggest_int('ff_dim', 128, 512)
+            dropout_rate = trial.suggest_float('dropout_rate', 0.1, 0.5)
+            learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e-2)
 
-        loss, accuracy = self.model.evaluate(X_val, y_val, verbose=0)
-        return accuracy
+            self.build_model()  # Rebuild model with new hyperparameters
 
+            opt = Adam(learning_rate=learning_rate)
+            self.model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+
+            early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+            self.model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test),
+                           callbacks=[early_stopping, TFKerasPruningCallback(trial, monitor='val_loss')], verbose=0)
+
+            _, accuracy = self.model.evaluate(X_test, y_test, verbose=0)
+            return accuracy
+
+        study = optuna.create_study(direction='maximize')
+        study.optimize(objective, n_trials=50)
+
+        return study
 
     def evaluate(self, X_test, y_test):
         loss, accuracy = self.model.evaluate(X_test, y_test)

@@ -20,11 +20,16 @@ def training_pipeline(file_name: str, time_steps: int, units, dropout_rate, epoc
                 best_params = {}  # Use default or preset hyperparameters
         elif model_type == 'Transformer':
             if use_tuning:
-                study = TransformerModel.optimize(X_train, Y_train, X_test, Y_test)
+                # Create an instance of TransformerModel with initial parameters to call optimize method
+                initial_transformer = TransformerModel(input_shape=input_shape, num_classes=num_classes, d_k=32, d_v=32,
+                                                       n_heads=4, ff_dim=128, encoding_type=encoding_type)
+                study = initial_transformer.optimize(X_train, Y_train, X_test, Y_test)
                 best_params = study.best_trial.params
             else:
-                best_params = {'d_k': 32, 'd_v': 32, 'n_heads': 8, 'ff_dim': 128}  # Use default or preset hyperparameters
-            model = TransformerModel(input_shape=input_shape, num_classes=num_classes, encoding_type=encoding_type, **best_params)
+                best_params = {'d_k': 32, 'd_v': 32, 'n_heads': 8,
+                               'ff_dim': 128}  # Use default or preset hyperparameters
+            model = TransformerModel(input_shape=input_shape, num_classes=num_classes, encoding_type=encoding_type,
+                                     **best_params)
         else:
             raise ValueError("Unsupported model type. Choose 'LSTM' or 'Transformer'.")
 
@@ -33,7 +38,7 @@ def training_pipeline(file_name: str, time_steps: int, units, dropout_rate, epoc
         if model_type == 'LSTM':
             history = model.train(X_train=X_train, y_train=Y_train, X_test=X_test, y_test=Y_test, epochs=epochs, batch_size=batch_size)
         elif model_type == 'Transformer':
-            history = model.train(X_train=X_train, y_train=Y_train, X_val=X_test, y_val=Y_test, epochs=epochs, batch_size=batch_size)
+            history = model.train(X_train=X_train, y_train=Y_train, X_test=X_test, y_test=Y_test, epochs=epochs, batch_size=batch_size)
 
         model.save_model(f'save_model/{model_type}_model.h5')
         model.save_history(history, f'save_history/{model_type}_history.csv')
